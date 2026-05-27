@@ -285,31 +285,8 @@
                     <th>จัดการ</th>
                 </tr>
             </thead>
-            <tbody>
-                <tr>
-                    <td>หนังสือเรียนเขียนโปรแกรม</td>
-                    <td><button class="btn-qty-plus">+</button><span class="qty-val">10</span><button class="btn-qty-minus">-</button></td>
-                    <td>฿5,000</td>
-                    <td><button class="btn-danger">ลบทั้งหมด</button></td>
-                </tr>
-                <tr>
-                    <td>คีย์บอร์ดไร้สาย</td>
-                    <td><button class="btn-qty-plus">+</button><span class="qty-val">5</span><button class="btn-qty-minus">-</button></td>
-                    <td>฿7,500</td>
-                    <td><button class="btn-danger">ลบทั้งหมด</button></td>
-                </tr>
-                <tr>
-                    <td>เมาส์เพื่อสุขภาพ</td>
-                    <td><button class="btn-qty-plus">+</button><span class="qty-val">2</span><button class="btn-qty-minus">-</button></td>
-                    <td>฿2,500</td>
-                    <td><button class="btn-danger">ลบทั้งหมด</button></td>
-                </tr>
-                <tr>
-                    <td>หน้าจอคอมพิวเตอร์ 4K</td>
-                    <td><button class="btn-qty-plus">+</button><span class="qty-val">1</span><button class="btn-qty-minus">-</button></td>
-                    <td>฿12,000</td>
-                    <td><button class="btn-danger">ลบทั้งหมด</button></td>
-                </tr>
+            <tbody id="tableBody">
+                <!-- Data will be loaded here from API -->
             </tbody>
         </table>
     </div>
@@ -379,10 +356,28 @@
             }
         });
 
-        // Calculate Total Sales and Update Chart from Table Data
-        function updateDashboard() {
-            const table = document.getElementById('salesTable');
-            const rows = table.querySelectorAll('tbody tr');
+        const API_URL = 'https://sheetdb.io/api/v1/wgknr1koznrgh';
+        let dashboardData = [];
+
+        // Fetch Data from API
+        async function fetchAndRenderData() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                dashboardData = data;
+                renderDashboard();
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                alert("เกิดข้อผิดพลาดในการดึงข้อมูลจากเซิร์ฟเวอร์");
+            }
+        }
+
+        // Render Table and Update Chart
+        function renderDashboard() {
+            const tableBody = document.querySelector('#tableBody');
+            tableBody.innerHTML = '';
+            
             let totalSales = 0;
             const chartData = [];
             const chartLabels = [];
@@ -394,20 +389,27 @@
                 'rgba(139, 92, 246, 0.8)'  // purple
             ];
 
-            rows.forEach((row, index) => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 3) {
-                    const name = cells[0].innerText.trim();
-                    const qtyEl = cells[1].querySelector('.qty-val');
-                    const quantity = qtyEl ? parseInt(qtyEl.innerText.replace(/,/g, ''), 10) : parseInt(cells[1].innerText.replace(/,/g, ''), 10);
-                    const price = parseFloat(cells[2].innerText.replace(/[฿,]/g, '').trim());
-
-                    if (!isNaN(quantity) && !isNaN(price)) {
-                        const rowTotal = quantity * price;
-                        totalSales += rowTotal;
-                        chartData.push(rowTotal);
-                        chartLabels.push(name);
-                    }
+            dashboardData.forEach(item => {
+                const name = item.name;
+                const qty = parseInt(item.quantity, 10);
+                const price = parseFloat(item.price);
+                
+                if (!isNaN(qty) && !isNaN(price)) {
+                    const rowTotal = qty * price;
+                    totalSales += rowTotal;
+                    chartData.push(rowTotal);
+                    chartLabels.push(name);
+                    
+                    const formattedPrice = '฿' + price.toLocaleString('en-US');
+                    const newRow = document.createElement('tr');
+                    newRow.dataset.name = name;
+                    newRow.innerHTML = `
+                        <td>${name}</td>
+                        <td><button class="btn-qty-plus">+</button><span class="qty-val">${qty}</span><button class="btn-qty-minus">-</button></td>
+                        <td>${formattedPrice}</td>
+                        <td><button class="btn-danger">ลบทั้งหมด</button></td>
+                    `;
+                    tableBody.appendChild(newRow);
                 }
             });
 
@@ -421,15 +423,16 @@
             salesChart.update();
         }
 
-        updateDashboard();
+        // Fetch on load
+        fetchAndRenderData();
 
         // Event Listener for Download Button
         document.getElementById('downloadBtn').addEventListener('click', function() {
             alert('ระบบกำลังดาวน์โหลดรายงานของคุณ...');
         });
 
-        // Event Listener for Add Product Button
-        document.getElementById('addProductBtn').addEventListener('click', function() {
+        // Event Listener for Add Product Button (POST)
+        document.getElementById('addProductBtn').addEventListener('click', async function() {
             const nameInput = document.getElementById('newProductName');
             const qtyInput = document.getElementById('newProductQty');
             const priceInput = document.getElementById('newProductPrice');
@@ -439,59 +442,122 @@
             const price = parseFloat(priceInput.value);
 
             if (name && !isNaN(qty) && qty > 0 && !isNaN(price) && price >= 0) {
-                const tableBody = document.querySelector('#salesTable tbody');
-                const newRow = document.createElement('tr');
-                
-                const formattedPrice = '฿' + price.toLocaleString('en-US');
-                
-                newRow.innerHTML = `
-                    <td>${name}</td>
-                    <td><button class="btn-qty-plus">+</button><span class="qty-val">${qty}</span><button class="btn-qty-minus">-</button></td>
-                    <td>${formattedPrice}</td>
-                    <td><button class="btn-danger">ลบทั้งหมด</button></td>
-                `;
-                tableBody.appendChild(newRow);
+                const btn = this;
+                btn.disabled = true;
+                btn.innerText = 'กำลังเพิ่ม...';
 
-                // Clear inputs
-                nameInput.value = '';
-                qtyInput.value = '';
-                priceInput.value = '';
-
-                // Trigger update
-                updateDashboard();
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            data: { name: name, quantity: qty, price: price }
+                        })
+                    });
+                    if (!response.ok) throw new Error('API Error');
+                    
+                    nameInput.value = '';
+                    qtyInput.value = '';
+                    priceInput.value = '';
+                    
+                    await fetchAndRenderData();
+                } catch (err) {
+                    console.error(err);
+                    alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = 'เพิ่มสินค้าใหม่';
+                }
             } else {
                 alert('กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้อง');
             }
         });
 
-        // Event delegation for table actions
-        document.querySelector('#salesTable tbody').addEventListener('click', function(e) {
+        // Event delegation for table actions (PATCH / DELETE)
+        document.querySelector('#salesTable').addEventListener('click', async function(e) {
             if (e.target.classList.contains('btn-danger')) {
                 const row = e.target.closest('tr');
-                row.classList.add('fade-out');
-                setTimeout(() => {
-                    row.remove();
-                    updateDashboard();
-                }, 400);
-            } else if (e.target.classList.contains('btn-qty-minus')) {
-                const row = e.target.closest('tr');
-                const qtySpan = row.querySelector('.qty-val');
-                let qty = parseInt(qtySpan.innerText, 10);
-                if (qty > 1) {
-                    qty--;
-                    qtySpan.innerText = qty;
-                    updateDashboard();
-                } else {
-                    row.remove();
-                    updateDashboard();
+                const name = row.dataset.name;
+                const btn = e.target;
+                btn.disabled = true;
+                btn.innerText = 'กำลังลบ...';
+                
+                try {
+                    const response = await fetch(`${API_URL}/name/${encodeURIComponent(name)}`, {
+                        method: 'DELETE',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!response.ok) throw new Error('API Error');
+                    
+                    row.classList.add('fade-out');
+                    setTimeout(() => {
+                        fetchAndRenderData();
+                    }, 400);
+                } catch (err) {
+                    console.error(err);
+                    alert('เกิดข้อผิดพลาดในการลบข้อมูล');
+                    btn.disabled = false;
+                    btn.innerText = 'ลบทั้งหมด';
                 }
-            } else if (e.target.classList.contains('btn-qty-plus')) {
+                
+            } else if (e.target.classList.contains('btn-qty-minus') || e.target.classList.contains('btn-qty-plus')) {
                 const row = e.target.closest('tr');
+                const name = row.dataset.name;
                 const qtySpan = row.querySelector('.qty-val');
                 let qty = parseInt(qtySpan.innerText, 10);
-                qty++;
-                qtySpan.innerText = qty;
-                updateDashboard();
+                
+                const isMinus = e.target.classList.contains('btn-qty-minus');
+                if (isMinus) qty--;
+                else qty++;
+                
+                const btn = e.target;
+                btn.disabled = true;
+
+                if (qty <= 0) {
+                    // Delete row
+                    try {
+                        const response = await fetch(`${API_URL}/name/${encodeURIComponent(name)}`, {
+                            method: 'DELETE',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        if (!response.ok) throw new Error('API Error');
+                        row.classList.add('fade-out');
+                        setTimeout(() => {
+                            fetchAndRenderData();
+                        }, 400);
+                    } catch (err) {
+                        console.error(err);
+                        alert('เกิดข้อผิดพลาดในการลบข้อมูล');
+                        btn.disabled = false;
+                    }
+                } else {
+                    // Update quantity
+                    qtySpan.innerText = qty; // Optimistic update
+                    try {
+                        const response = await fetch(`${API_URL}/name/${encodeURIComponent(name)}`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                data: { quantity: qty }
+                            })
+                        });
+                        if (!response.ok) throw new Error('API Error');
+                        await fetchAndRenderData();
+                    } catch (err) {
+                        console.error(err);
+                        alert('เกิดข้อผิดพลาดในการอัปเดตข้อมูล');
+                        // Revert on error
+                        btn.disabled = false;
+                        if (isMinus) qty++; else qty--;
+                        qtySpan.innerText = qty;
+                    }
+                }
             }
         });
 
